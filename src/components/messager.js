@@ -12,41 +12,79 @@ export default class MessagerScreen extends React.Component {
         super(props);
         let {firebase} = this.props.screenProps;
         this.messages = firebase.firestore().collection('messages');
-        //this.rooms = firebase.firestore().collection('rooms');
         this.user = this.props.screenProps.user;
         this.unsubscribe = null;
         this.state = {
-            messages: [
-                {
-                    _id: 1,
-                    text: 'Hello developer',
-                    createdAt: new Date().getTime(),
-                    user: {
-                        name: 'React Native',
-                        avatar: 'https://facebook.github.io/react/img/logo_og.png',
-                    },
-                },
+            messages: [            
             ],
         }
     }
 
     componentDidMount() {
-        
+        this.unsubscribe = this.messages.onSnapshot(this.onCollectionUpdate)
     }
+
+    onCollectionUpdate = (querySnapshot) => {
+        console.log('update')
+        let messages = [];
+        querySnapshot.forEach(doc=>{
+            const data=doc.data();
+            if (data.to=="+84935235788") {
+                messages.push(Object.assign({},data,{
+                    user:{
+                        _id:data.from.name
+                    }
+                }));
+            } else if (data.from.name=="+84935235788") {
+                messages.push(Object.assign({},data,{
+                    user:{
+                        _id:data.from.name
+                    }
+                }));
+        }})
+        messages.sort((a,b)=> b.createdAt-a.createdAt)
+        this.setState({messages});
+    }
+
     
-   
+    
+    componentWillUnmount() {
+        this.unsubscribe();
+    }
+
+    getMessage = () => {
+        let {phoneNumber} = this.user;
+        this.messages.where('to','==',phoneNumber).get().then(_querySnapshot=>{
+            this.messages.where('from.name','==',phoneNumber).get().then(__querySnapshot => {
+                let docs = _querySnapshot.docs.concat(__querySnapshot.docs);
+                let messages = [];
+                docs.forEach(doc=>{
+                    const data = doc.data();
+                    messages.push(Object.assign({},data,{
+                        user:{
+                            _id:data.from.name
+                        }
+                    }));
+                })
+                messages.sort((a,b) => b.createdAt-a.createdAt)
+                this.setState({messages});
+            })
+           
+        })
+    }
+
 
     onSend(messages = []) {
         let message = messages[0];
         this.messages.add(Object.assign({},message,{
-            user:{
-                _id:this.user.uid,
+            from:{
+                _id:this.user.phoneNumber,
                 name:this.user.phoneNumber
-            }
+            },
+            to:'admin',
+            createdAt: new Date().getTime()
         }))
-        this.setState(previousState => ({
-            messages: GiftedChat.append(previousState.messages, messages),
-        }))
+      
     }
 
     render() {
@@ -57,7 +95,7 @@ export default class MessagerScreen extends React.Component {
                         messages={this.state.messages}
                         onSend={messages => this.onSend(messages)}
                         user={{
-                            _id: 1,
+                            _id: this.user.phoneNumber,
                         }}
                     />
         );
